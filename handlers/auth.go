@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"go-echo-vue/models"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -24,27 +25,48 @@ func DoAuthorize(db *sql.DB, googleAuthConfig *oauth2.Config) echo.HandlerFunc {
 		if err != nil {
 			panic(err)
 		}
-		if c.QueryParam("state") != sess.Values["StateString"] {
-			return c.JSON(http.StatusUnauthorized, nil)
-		} else {
-			user, token, err := models.OauthUser(googleAuthConfig, c.QueryParam("code"), c)
-			if err != nil {
-				c.Logger().Debug(fmt.Printf("OauthUser OauthUser %v \n", err))
-				return c.JSON(http.StatusBadRequest, nil)
-			}
-			_, err = models.SaveUser(db, user)
-			if err != nil {
-				c.Logger().Debug(fmt.Printf("sqlExecError sqlExecError %v \n", err))
-				return c.JSON(http.StatusBadRequest, nil)
-			}
-			sess.Values["user-id"] = user.Email
-			marshalledToken, _ := json.Marshal(token)
-			sess.Values["token"] = marshalledToken
-			sess.Save(c.Request(), c.Response())
-
-			return c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/", c.Request().URL.Host))
-			//return c.JSON(http.StatusOK, user)
+		loginAttempt := new(models.LoginAttempt)
+		if err = c.Bind(loginAttempt); err != nil {
+			c.Logger().Debug(fmt.Printf("Error Binding Request to LoginAttempt Struct %v \n", err))
+			return c.JSON(http.StatusBadRequest, nil)
 		}
+		user, token, err := models.ExchangeCodeForToken(googleAuthConfig, loginAttempt.Code, c)
+		if err != nil {
+			c.Logger().Debug(fmt.Printf("OauthUser OauthUser %v \n", err))
+			return c.JSON(http.StatusBadRequest, nil)
+		}
+		_, err = models.SaveUser(db, user)
+		if err != nil {
+			c.Logger().Debug(fmt.Printf("sqlExecError sqlExecError %v \n", err))
+			return c.JSON(http.StatusBadRequest, nil)
+		}
+		sess.Values["user-id"] = user.Email
+		marshalledToken, _ := json.Marshal(token)
+		sess.Values["token"] = marshalledToken
+		sess.Save(c.Request(), c.Response())
+
+		//return c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/", c.Request().URL.Host))
+		c.Response().Header().Set("token-type", token.Type())
+		c.Response().Header().Set("access-token", token.AccessToken)
+		c.Response().Header().Set("expiry", token.Expiry.Format(time.RFC3339))
+		c.Response().Header().Set("uid", user.Email)
+		return c.JSON(http.StatusOK, H{
+			"data": user,
+		})
+	}
+}
+
+func GetUser(googleAuthConfig *oauth2.Config) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user, err := models.GetUserGoogle(googleAuthConfig, c)
+		if err != nil {
+			c.Logger().Debug(fmt.Printf("GetUser OauthUser %v \n", err))
+			return c.JSON(http.StatusBadRequest, nil)
+		}
+		c.Logger().Debug("GetUserGoogle Successful")
+		return c.JSON(http.StatusOK, H{
+			"data": user,
+		})
 	}
 }
 
@@ -74,26 +96,33 @@ func DoLogin(googleAuthConfig *oauth2.Config) echo.HandlerFunc {
 func AuthMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			sess, err := session.Get("session", c)
-			if err != nil {
-				return echo.ErrUnauthorized
-			}
+			// sess, err := session.Get("session", c)
+			// if err != nil {
+			// 	return echo.ErrUnauthorized
+			// }
 			token := new(oauth2.Token)
-			c.Logger().Debug("Unmarshal Token")
-			if sess.Values["token"] != nil && sess.Values["user-id"] != nil {
-				json.Unmarshal(sess.Values["token"].([]byte), &token)
-				c.Logger().Debug("Checking Token")
-				if token != nil && token.Valid() {
-					c.Logger().Debug("Valid Token")
-					return next(c)
-				} else {
-					c.Logger().Debug("Invalid Token")
-					return echo.ErrUnauthorized
-				}
+			// c.Logger().Debug("Unmarshal Token")
+			// if sess.Values["token"] != nil && sess.Values["user-id"] != nil {
+			// 	json.Unmarshal(sess.Values["token"].([]byte), &token)
+			c.Logger().Debug("Checking Token")
+
+			token.TokenType = c.Request().Header.Get("token-type")
+			token.AccessToken = c.Request().Header.Get("access-token")
+			token.Expiry, _ = time.Parse(time.RFC3339, c.Request().Header.Get("expiry"))
+			c.Request().Header.Get("uid")
+			if token != nil && token.Valid() {
+				c.Logger().Debug("Valid Token")
+				c.Set("token", token)
+				c.Set("uid", c.Request().Header.Get("uid"))
+				return next(c)
 			} else {
-				c.Logger().Debug("No Session.")
+				c.Logger().Debug("Invalid Token")
 				return echo.ErrUnauthorized
 			}
+			// } else {
+			// 	c.Logger().Debug("No Session.")
+			// 	return echo.ErrUnauthorized
+			// }
 		}
 	}
 }

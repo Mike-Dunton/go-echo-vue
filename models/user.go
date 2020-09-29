@@ -4,13 +4,15 @@ package models
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/ioutil"
 
 	"github.com/labstack/echo"
 	"golang.org/x/oauth2"
 )
 
-// User is a retrieved and authentiacted user.
+// User is a retrieved and authenticated user.
 type User struct {
 	Sub           string `json:"sub"`
 	Name          string `json:"name"`
@@ -23,8 +25,12 @@ type User struct {
 	Gender        string `json:"gender"`
 }
 
+type LoginAttempt struct {
+	Code string `json:"code"`
+}
+
 // OauthUser gets info from the oauth endpoint
-func OauthUser(googleAuthConfig *oauth2.Config, code string, c echo.Context) (user User, token *oauth2.Token, err error) {
+func ExchangeCodeForToken(googleAuthConfig *oauth2.Config, code string, c echo.Context) (user User, token *oauth2.Token, err error) {
 	token, err = googleAuthConfig.Exchange(oauth2.NoContext, code)
 	if err != nil {
 		c.Logger().Debug("Exchange Failed")
@@ -43,6 +49,27 @@ func OauthUser(googleAuthConfig *oauth2.Config, code string, c echo.Context) (us
 		return user, token, nil
 	}
 	return User{}, nil, err
+}
+
+func GetUserGoogle(googleAuthConfig *oauth2.Config, c echo.Context) (user User, err error) {
+	token := c.Get("token")
+	if token != nil {
+		client := googleAuthConfig.Client(oauth2.NoContext, token.(*oauth2.Token))
+		userinfo, err := client.Get("https://www.googleapis.com/oauth2/v3/userinfo")
+		if err != nil {
+			c.Logger().Debug("UserInfoGet Failed")
+			return User{}, err
+		}
+		defer userinfo.Body.Close()
+		data, _ := ioutil.ReadAll(userinfo.Body)
+		c.Logger().Debug(fmt.Sprintf("data %v", string(data)))
+		if err = json.Unmarshal(data, &user); err != nil {
+			c.Logger().Debug("Unmarshal Successful")
+			return user, nil
+		}
+		return User{}, err
+	}
+	return User{}, errors.New("No Token Set")
 }
 
 //SaveUser Saves user to DB

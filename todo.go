@@ -60,16 +60,21 @@ func main() {
 		e.Logger.SetLevel(log.DEBUG)
 	}
 
-	e.Static("/", "client/todo/dist/")
-	e.GET("/login", handlers.DoLogin(googleOauthConfig))
-	e.GET("/authorize", handlers.DoAuthorize(db, googleOauthConfig))
+	e.File("/login/google", "client/recipe-book/dist/index.html")
+	e.POST("/login/google", handlers.DoAuthorize(db, googleOauthConfig))
+	e.Static("/", "client/recipe-book/dist/")
+	// e.GET("/login", handlers.DoLogin(googleOauthConfig))
 
 	private := e.Group("/auth")
 	private.Use(handlers.AuthMiddleware())
-	private.File("/", "public/private.html")
+	private.GET("/user", handlers.GetUser(googleOauthConfig))
+
 	private.GET("/tasks", handlers.GetTasks(db))
 	private.PUT("/tasks", handlers.PutTask(db))
 	private.DELETE("/tasks/:id", handlers.DeleteTask(db))
+
+	private.GET("/recipes", handlers.GetRecipes(db))
+	private.GET("/recipes/:id", handlers.GetRecipe(db))
 
 	// Start as a web server
 	e.Start(":8000")

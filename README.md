@@ -36,3 +36,7 @@ These references listed are in no particular order.
 - https://bootstrap-vue.org/
 - https://vuejs.org/v2/guide/installation.html
 - https://cloud.google.com/sql/docs/mysql/connect-external-app#languages
+- https://humansky.com/2011/12/accidentally-adding-a-git-submodule/
+- https://auth0.com/blog/beginner-vuejs-tutorial-with-user-login/
+- https://github.com/vuejs/vuex/tree/dev/examples/shopping-cart
+- search https://medium.com/devs-foodit/how-foodit-selected-a-search-platform-within-the-google-app-engine-environment-72564f254193
