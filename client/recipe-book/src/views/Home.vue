@@ -9,14 +9,10 @@
         <h2 class="subtitle">
           Check out recently added recipes below
         </h2>
-        <div class="button-block" >
-          <button v-if="!$auth.check()" class="button is-xl is-dark">Sign Up to Add Your Own Recipes</button>
-          <h3 v-if="$auth.check()" class="is-size-5 has-background-dark welcome">Welcome, {{ _user.name }}!</h3>
-        </div>
       </div>
     </div>
   </section>
-  <RecipeList />
+  <RecipeList v-if="_loaded" />
 </div>
 </template>
 <script>
@@ -28,7 +24,7 @@ export default {
       return this.$auth.user() || {};
     },
     _loaded() {
-      return this.$auth.ready();
+      return this.$auth.ready() && this.$auth.check();
     }
   },
   components: {
@@ -53,25 +49,6 @@ export default {
   .subtitle {
     text-shadow:  2px 2px 2px rgba(0, 0, 0, 0.7);
     font-size: 30px;
-  }
-  .button-block {
-    text-align: center;
-    margin-left: auto;
-    margin-right: auto;
-    width: 100%;
-    position: absolute;
-    bottom: -100px;
-    .button {
-      margin-right: 50px;
-      padding-left: 50px;
-      padding-right: 50px;
-    }
-    .welcome {
-      width: 375px;
-      padding: 9px;
-      margin-left: auto;
-      margin-right: auto;
-    }
   }
   .is-xl {
     font-size: 1.7rem;

@@ -1,11 +1,10 @@
 package main
 
 import (
-	"database/sql"
+	"context"
 	"go-echo-vue/handlers"
 	"os"
 
-	"github.com/GoogleCloudPlatform/cloudsql-proxy/proxy/dialers/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo"
@@ -14,6 +13,8 @@ import (
 	"github.com/labstack/gommon/log"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+
+	"cloud.google.com/go/firestore"
 )
 
 var (
@@ -39,15 +40,9 @@ func main() {
 		Endpoint: google.Endpoint,
 	}
 
-	cfg := mysql.Cfg(os.Getenv("TODO_SQL_CONNECTION_STRING"), os.Getenv("TODO_SQL_USER"), os.Getenv("TODO_SQL_PASSWORD"))
-	cfg.DBName = os.Getenv("TODO_SQL_DATABASE")
-	db, err := mysql.DialCfg(cfg)
-	if err != nil {
-		panic(err)
-	}
-
-	// create tasks db
-	migrate(db)
+	ctx := context.Background()
+	dbClient := createClient(ctx)
+	defer dbClient.Close()
 
 	// Create a new instance of Echo
 	e := echo.New()
@@ -61,49 +56,29 @@ func main() {
 	}
 
 	e.File("/login/google", "client/recipe-book/dist/index.html")
-	e.POST("/login/google", handlers.DoAuthorize(db, googleOauthConfig))
+	e.POST("/login/google", handlers.DoAuthorize(ctx, dbClient, googleOauthConfig))
 	e.Static("/", "client/recipe-book/dist/")
-	// e.GET("/login", handlers.DoLogin(googleOauthConfig))
 
 	private := e.Group("/auth")
 	private.Use(handlers.AuthMiddleware())
-	private.GET("/user", handlers.GetUser(googleOauthConfig))
+	private.GET("/user", handlers.GetUser(ctx, dbClient))
 
-	private.GET("/tasks", handlers.GetTasks(db))
-	private.PUT("/tasks", handlers.PutTask(db))
-	private.DELETE("/tasks/:id", handlers.DeleteTask(db))
-
-	private.GET("/recipes", handlers.GetRecipes(db))
-	private.GET("/recipes/:id", handlers.GetRecipe(db))
+	private.GET("/recipes", handlers.GetRecipes(ctx, dbClient))
+	private.GET("/recipes/:id", handlers.GetRecipe(ctx, dbClient))
 
 	// Start as a web server
 	e.Start(":8000")
 }
 
-func migrate(db *sql.DB) {
-	usersSql := `
-	CREATE TABLE IF NOT EXISTS users(
-        email VARCHAR(64) PRIMARY KEY NOT NULL
-	);
-	`
-	tasksSql := `
-	CREATE TABLE IF NOT EXISTS tasks(
-		id INTEGER NOT NULL PRIMARY KEY AUTO_INCREMENT,
-		user_id  VARCHAR(64) NOT NULL,
-		description VARCHAR(64) NOT NULL,
-		FOREIGN KEY (user_id) REFERENCES users(email) 
-	);
-    `
+func createClient(ctx context.Context) *firestore.Client {
+	// Sets your Google Cloud Platform project ID.
+	projectID := os.Getenv("GOOGLE_PROJECT_ID")
 
-	_, err := db.Exec(usersSql)
-	// Exit if something goes wrong with our SQL statement above
+	client, err := firestore.NewClient(ctx, projectID)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create client: %v", err)
 	}
-
-	_, err = db.Exec(tasksSql)
-	// Exit if something goes wrong with our SQL statement above
-	if err != nil {
-		panic(err)
-	}
+	// Close client when done with
+	// defer client.Close()
+	return client
 }

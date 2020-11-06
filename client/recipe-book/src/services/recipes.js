@@ -41,6 +41,28 @@ export default {
                 handleError(error)
                 cb([])
             })
+    },
+    putRecipe (recipe, cb) {
+        Vue.axios.put('/auth/recipes/', recipe)
+            .then((response) => {
+                console.log(response.data)
+                cb(response.data)
+            })
+            .catch((error) => {
+                handleError(error)
+                cb([])
+            })
+    },
+    postRecipe (recipe, cb) {
+        Vue.axios.post('/auth/recipes/', recipe)
+            .then((response) => {
+                console.log(response.data)
+                cb(response.data)
+            })
+            .catch((error) => {
+                handleError(error)
+                cb([])
+            })
     }
 }
   

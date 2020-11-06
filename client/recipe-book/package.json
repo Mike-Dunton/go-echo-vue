@@ -14,6 +14,7 @@
     "@websanova/vue-auth": "^3.3.4",
     "axios": "^0.20.0",
     "bulma": "^0.9.0",
+    "bulma-badge": "^3.0.1",
     "core-js": "^3.6.5",
     "vue": "^2.6.11",
     "vue-axios": "^2.1.5",

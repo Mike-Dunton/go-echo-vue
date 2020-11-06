@@ -20,6 +20,9 @@ const actions = {
       recipeService.getRecipe(id, recipe => {
           commit('setRecipe', recipe)
       })
+  },
+  selectRecipe (context, selectedRecipe) {
+    context.commit('setRecipe', { update: selectedRecipe})
   }
 }
 
@@ -28,8 +31,14 @@ const mutations = {
   setRecipes (state, recipes) {
     state.all = recipes
   },
-  setRecipe(state, recipe) {
-      state.selected = recipe
+  setRecipe(state, selectedRecipe) {
+    console.log("we mutate", selectedRecipe)
+    if (selectedRecipe == null || selectedRecipe.update === undefined) {
+      state.selected = selectedRecipe
+    } else {
+       var update = selectedRecipe.update
+       state.selected = {...state.selected, ...update}
+    }
   }
 }
 

@@ -2,8 +2,10 @@
 package models
 
 import (
-	"database/sql"
+	"context"
 	"errors"
+
+	"cloud.google.com/go/firestore"
 )
 
 // Recipe is a struct containing Task data
@@ -17,11 +19,11 @@ type Recipe struct {
 }
 
 // GetRecipes returns a list a RecipeCollection
-func GetRecipes(db *sql.DB, userID string) []Recipe {
+func GetRecipes(ctx context.Context, db *firestore.Client, userID string) []Recipe {
 	return localRecipes()
 }
 
-func GetRecipe(db *sql.DB, userID string, recipeID int) (Recipe, error) {
+func GetRecipe(ctx context.Context, db *firestore.Client, userID string, recipeID int) (Recipe, error) {
 	selectedRecipe, found := find(localRecipes(), recipeID)
 	if found {
 		return selectedRecipe, nil
@@ -45,7 +47,7 @@ func localRecipes() []Recipe {
 			Name:          "Meatballs",
 			Category:      "Food",
 			Description:   "Meaty Meatballs",
-			FeaturedImage: "https://baconmockup.com/200/200",
+			FeaturedImage: "https://baconmockup.com/400/600",
 			Images: []string{
 				"https://baconmockup.com/200/200",
 				"https://baconmockup.com/200/200",
@@ -54,10 +56,10 @@ func localRecipes() []Recipe {
 		},
 		{
 			ID:            69420,
-			Name:          "Japanese Old Fashioned ",
+			Name:          "Japanese Old Fashioned",
 			Category:      "Drink",
 			Description:   "Old Fashioned Made with Japanese Whisky",
-			FeaturedImage: "https://placebeer.com/400/400",
+			FeaturedImage: "https://placebeer.com/400/600",
 			Images: []string{
 				"https://placebeer.com/400/400",
 				"https://placebeer.com/200/200",

@@ -33,11 +33,13 @@ Vue.use(auth, {
  
 
 import 'bulma/css/bulma.css'
+import 'bulma-badge/dist/css/bulma-badge.min.css'
+
 import { library } from '@fortawesome/fontawesome-svg-core'
-import { faUserSecret } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faUtensils } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 
-library.add(faUserSecret)
+library.add(faPlus, faUtensils)
 
 Vue.component('font-awesome-icon', FontAwesomeIcon)
 Vue.config.productionTip = false

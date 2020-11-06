@@ -13,6 +13,7 @@
   <div id="navbar" class="navbar-menu" :class="{ 'is-active': showNav }" >
     <div class="navbar-start">
       <router-link to="/" class="navbar-item">Home</router-link>
+      <router-link to="/recipes" class="navbar-item">Recipes</router-link>
       <router-link to="/about" class="navbar-item">About</router-link>
     </div>
     <div class="navbar-end" v-if="$auth.ready()">
@@ -23,7 +24,7 @@
           </button>
         </div>
         <div class="buttons"  v-if="$auth.check()">
-          <button class="button is-dark" @click="logout()">
+          <button class="button is-danger" @click="logout()">
             <strong>Log Out</strong>
           </button>
         </div>

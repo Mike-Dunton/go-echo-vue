@@ -2,8 +2,8 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -11,15 +11,18 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/sessions"
+	"cloud.google.com/go/firestore"
 	"github.com/labstack/echo-contrib/session"
 
 	"github.com/labstack/echo"
 	"golang.org/x/oauth2"
 )
 
+// H return arbitrary JSON in our response
+type H map[string]interface{}
+
 // DoAuthorize endpoint
-func DoAuthorize(db *sql.DB, googleAuthConfig *oauth2.Config) echo.HandlerFunc {
+func DoAuthorize(ctx context.Context, db *firestore.Client, googleAuthConfig *oauth2.Config) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		sess, err := session.Get("session", c)
 		if err != nil {
@@ -35,12 +38,13 @@ func DoAuthorize(db *sql.DB, googleAuthConfig *oauth2.Config) echo.HandlerFunc {
 			c.Logger().Debug(fmt.Printf("OauthUser OauthUser %v \n", err))
 			return c.JSON(http.StatusBadRequest, nil)
 		}
-		_, err = models.SaveUser(db, user)
+		user.LastLogin = time.Now().Format(time.RFC3339)
+		err = models.SaveUser(ctx, db, user)
 		if err != nil {
 			c.Logger().Debug(fmt.Printf("sqlExecError sqlExecError %v \n", err))
 			return c.JSON(http.StatusBadRequest, nil)
 		}
-		sess.Values["user-id"] = user.Email
+		sess.Values["user-id"] = user.Sub
 		marshalledToken, _ := json.Marshal(token)
 		sess.Values["token"] = marshalledToken
 		sess.Save(c.Request(), c.Response())
@@ -56,9 +60,14 @@ func DoAuthorize(db *sql.DB, googleAuthConfig *oauth2.Config) echo.HandlerFunc {
 	}
 }
 
-func GetUser(googleAuthConfig *oauth2.Config) echo.HandlerFunc {
+func GetUser(ctx context.Context, db *firestore.Client) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		user, err := models.GetUserGoogle(googleAuthConfig, c)
+		sess, err := session.Get("session", c)
+		if err != nil {
+			panic(err)
+		}
+		userID := sess.Values["user-id"].(string)
+		user, err := models.GetUser(ctx, db, userID)
 		if err != nil {
 			c.Logger().Debug(fmt.Printf("GetUser OauthUser %v \n", err))
 			return c.JSON(http.StatusBadRequest, nil)
@@ -70,45 +79,26 @@ func GetUser(googleAuthConfig *oauth2.Config) echo.HandlerFunc {
 	}
 }
 
-// DoLogin endpoint
-func DoLogin(googleAuthConfig *oauth2.Config) echo.HandlerFunc {
-	stateString, _ := randToken()
-	url := googleAuthConfig.AuthCodeURL(stateString)
-	return func(c echo.Context) error {
-		sess, err := session.Get("session", c)
-		if err != nil {
-			panic(err)
-		}
-		sess.Options = &sessions.Options{
-			Path:     "/",
-			MaxAge:   3600 * 7,
-			HttpOnly: false,
-			Secure:   false,
-		}
-		sess.Values["StateString"] = stateString
-		sess.Save(c.Request(), c.Response())
-		return c.JSON(http.StatusOK, H{
-			"loginUrl": url,
-		})
-	}
-}
-
 func AuthMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			// sess, err := session.Get("session", c)
-			// if err != nil {
-			// 	return echo.ErrUnauthorized
-			// }
 			token := new(oauth2.Token)
-			// c.Logger().Debug("Unmarshal Token")
-			// if sess.Values["token"] != nil && sess.Values["user-id"] != nil {
-			// 	json.Unmarshal(sess.Values["token"].([]byte), &token)
+			sessionToken := new(oauth2.Token)
 			c.Logger().Debug("Checking Token")
-
+			sess, err := session.Get("session", c)
+			if err != nil {
+				panic(err)
+			}
+			err = json.Unmarshal(sess.Values["token"].([]byte), &sessionToken)
+			if err != nil {
+				panic(err)
+			}
 			token.TokenType = c.Request().Header.Get("token-type")
 			token.AccessToken = c.Request().Header.Get("access-token")
 			token.Expiry, _ = time.Parse(time.RFC3339, c.Request().Header.Get("expiry"))
+			if sessionToken.AccessToken != token.AccessToken {
+				return echo.ErrUnauthorized
+			}
 			c.Request().Header.Get("uid")
 			if token != nil && token.Valid() {
 				c.Logger().Debug("Valid Token")
@@ -119,10 +109,6 @@ func AuthMiddleware() echo.MiddlewareFunc {
 				c.Logger().Debug("Invalid Token")
 				return echo.ErrUnauthorized
 			}
-			// } else {
-			// 	c.Logger().Debug("No Session.")
-			// 	return echo.ErrUnauthorized
-			// }
 		}
 	}
 }
